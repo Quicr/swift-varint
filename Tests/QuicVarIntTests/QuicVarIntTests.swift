@@ -1,7 +1,7 @@
 import XCTest
 @testable import QuicVarInt
 
-protocol Allowed { }
+protocol Allowed: FixedWidthInteger { }
 extension UInt8: Allowed { }
 extension UInt16: Allowed { }
 extension UInt32: Allowed { }
@@ -25,20 +25,35 @@ final class QuicVarIntTests: XCTestCase {
     }
 
     func testTwoByteOneByteValue() throws {
-        try test(UInt16(0x4025), 37)
+        try test(UInt16(0x4025), 37, encode: false)
     }
 
-    private func test<T: Allowed>(_ value: T, _ expected: VarInt) throws {
-        // Get the test data as bytes.
-        var copy = value
-        let binary = Data(bytesNoCopy: &copy, count: MemoryLayout<T>.size, deallocator: .none)
+    let hostBigEndian: Bool = {
+        let number: UInt32 = 0x1234_5678
+        let isBigEndian = number == number.bigEndian
+        assert(!isBigEndian)
+        return number == number.bigEndian
+    }()
 
-        // Decode a VarInt from the test data and check equality.
-        let decoded = try VarInt(fromWire: binary)
+    private func test<T: Allowed>(_ value: T, _ expected: VarInt, encode: Bool = true) throws {
+        // On a little endian system, we need to byte swap.
+        let value: T = self.hostBigEndian ? value : value.byteSwapped
+
+        // Get the test data as bytes.
+        let networkBytes = UnsafeMutableRawBufferPointer.allocate(byteCount: MemoryLayout<T>.size, alignment: MemoryLayout<UInt8>.alignment)
+        defer { networkBytes.deallocate() }
+        networkBytes.storeBytes(of: value, as: T.self)
+
+        // Get the VarInt stored in network bytes, and compare to expected value.
+        let decoded = try VarInt(fromWire: .init(networkBytes))
         XCTAssertEqual(expected, decoded)
 
         // Ensure the encoded result gives the same bytes as the test data.
-        let encoded = try decoded.toWireFormat()
-        XCTAssertEqual(encoded, binary)
+        guard encode else { return }
+        let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: decoded.encodedBitWidth / 8,
+                                                            alignment: MemoryLayout<UInt8>.alignment)
+        defer { buffer.deallocate() }
+        try decoded.toWireFormat(into: buffer)
+        XCTAssert(buffer.elementsEqual(networkBytes))
     }
 }
