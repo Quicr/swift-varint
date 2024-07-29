@@ -9,16 +9,16 @@ struct VarInt: UnsignedInteger {
     typealias IntegerLiteralType = UInt64
     static let min: VarInt = 0
     static let max: VarInt = VarInt(UInt64((1 << 62)) - 1)
-
+    
     // Protocol conformances.
     let words: Words
     let bitWidth: Int
     let encodedBitWidth: Int
     let trailingZeroBitCount: Int
-
+    
     // Internal value.
     private let value: UInt64
-
+    
     init<T>(_ source: T) where T: BinaryInteger {
         self.value = .init(source)
         self.bitWidth = Self.calculateBitWidth(self.value)
@@ -26,7 +26,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init<T>(clamping source: T) where T: BinaryInteger {
         let clamped: T
         if source > Self.max {
@@ -42,7 +42,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init<T>(truncatingIfNeeded source: T) where T: BinaryInteger {
         guard source <= Self.max.value else {
             self.value = Self.max.value
@@ -58,7 +58,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init?<T>(exactly source: T) where T: BinaryInteger {
         guard let parsed = UInt64(exactly: source) else {
             return nil
@@ -69,7 +69,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init(integerLiteral value: UInt64) {
         self.value = value
         self.bitWidth = Self.calculateBitWidth(self.value)
@@ -77,7 +77,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init?<T>(exactly source: T) where T: BinaryFloatingPoint {
         guard let exactly = UInt64(exactly: source) else {
             return nil
@@ -88,7 +88,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init<T>(_ source: T) where T: BinaryFloatingPoint {
         self.value = UInt64(source)
         self.bitWidth = Self.calculateBitWidth(self.value)
@@ -96,7 +96,7 @@ struct VarInt: UnsignedInteger {
         self.words = self.value.words
         self.trailingZeroBitCount = self.value.trailingZeroBitCount
     }
-
+    
     init(fromWire data: UnsafeRawBufferPointer) throws {
         // We need at least a byte to work with!
         guard let firstByte = data.first else {
@@ -110,7 +110,7 @@ struct VarInt: UnsignedInteger {
             // We need at least length bytes given the length.
             throw VarIntError.bufferTooSmall(length)
         }
-
+        
         switch length {
         case 1:
             let built: UInt8 = Self.build(data: data, length: length)
@@ -135,27 +135,9 @@ struct VarInt: UnsignedInteger {
         for index in 1..<length {
             value |= T(data[index]).bigEndian >> (8 * index)
         }
-        return value
+        return value.littleEndian
     }
-
-    private static func lengthFromBits(bits: UInt8) -> Int {
-        guard bits == bits & 0b00000011 else {
-            fatalError()
-        }
-        switch bits {
-        case 0:
-            return 1
-        case 1:
-            return 2
-        case 2:
-            return 4
-        case 3:
-            return 8
-        default:
-            fatalError()
-        }
-    }
-
+    
     func toWireFormat(into: UnsafeMutableRawBufferPointer) throws {
         let requiredLength = self.bitWidth / 8
         guard into.count >= requiredLength else {
@@ -199,7 +181,7 @@ struct VarInt: UnsignedInteger {
             fatalError()
         }
     }
-
+    
     private static func calculateBitWidth(_ value: UInt64) -> Int {
         let oneByteMax: UInt64 = (1 << 6) - 1
         let twoByteMax: UInt64 = (1 << 14) - 1
@@ -218,7 +200,10 @@ struct VarInt: UnsignedInteger {
             fatalError("BitWidth")
         }
     }
+}
 
+// Operators.
+extension VarInt {
     static func / (lhs: VarInt, rhs: VarInt) -> VarInt {
         .init(lhs.value / rhs.value)
     }
