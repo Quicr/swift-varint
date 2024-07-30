@@ -1,13 +1,9 @@
+#if canImport(Foundation)
 import XCTest
 @testable import QuicVarInt
+import Foundation
 
-protocol Allowed: FixedWidthInteger { }
-extension UInt8: Allowed { }
-extension UInt16: Allowed { }
-extension UInt32: Allowed { }
-extension UInt64: Allowed { }
-
-final class QuicVarIntTests: XCTestCase {
+final class QuicVarIntFoundationTests: XCTestCase {
     func testEightByte() throws {
         try test(UInt64(0xc2197c5eff14e88c), 151_288_809_941_952_652)
     }
@@ -30,21 +26,18 @@ final class QuicVarIntTests: XCTestCase {
 
     private func test<T: Allowed>(_ value: T, _ expected: VarInt, encode: Bool = true) throws {
         // Get the test data as bytes.
-        let networkBytes = UnsafeMutableRawBufferPointer.allocate(byteCount: MemoryLayout<T>.size,
-                                                                  alignment: MemoryLayout<UInt8>.alignment)
-        defer { networkBytes.deallocate() }
-        networkBytes.storeBytes(of: value.bigEndian, as: T.self)
+        var copy = value.bigEndian
+        let networkBytes = Data(bytes: &copy, count: MemoryLayout<T>.size)
 
         // Get the VarInt stored in network bytes, and compare to expected value.
-        let decoded = try VarInt(fromWire: .init(networkBytes))
+        let decoded = try VarInt.fromData(fromWire: networkBytes)
         XCTAssertEqual(expected, decoded)
 
         // Ensure the encoded result gives the same bytes as the test data.
         guard encode else { return }
-        let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: decoded.encodedBitWidth / 8,
-                                                            alignment: MemoryLayout<UInt8>.alignment)
-        defer { buffer.deallocate() }
-        try decoded.toWireFormat(into: buffer)
+        var buffer = Data(count: decoded.encodedBitWidth / 8)
+        try decoded.toWireFormat(into: &buffer)
         XCTAssert(buffer.elementsEqual(networkBytes))
     }
 }
+#endif
