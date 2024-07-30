@@ -54,3 +54,8 @@ let package = Package(
   ]
 )
 ```
+
+## Development
+
+- Usual swift tooling workflow, `swift build` and `swift test`. 
+- A pre-commit hook is setup for SwiftLint, install using `pre-commit install`. 
