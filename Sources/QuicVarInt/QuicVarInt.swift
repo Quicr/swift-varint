@@ -5,7 +5,7 @@ public enum VarIntError: Error {
 }
 
 /// Implementation of QUIC's Variable Length Integer per RFC9000.
-public struct VarInt: UnsignedInteger {
+public struct VarInt: UnsignedInteger, Sendable {
     public typealias Words = UInt64.Words
     public typealias IntegerLiteralType = UInt64
     public static let min: VarInt = 0
